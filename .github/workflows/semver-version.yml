@@ -77,6 +77,7 @@ jobs:
           CHECK_LAST_COMMIT_ONLY: ${{ inputs.check_last_commit_only }}
           IS_PRERELEASE: ${{ inputs.is_prerelease }}
           PRERELEASE_NAME: ${{ inputs.prerelease_name }}
+          SUPPRESS_TAG: ${{ inputs.suppress_tag }}
         shell: bash
         run: |
           set -eo pipefail
@@ -85,6 +86,7 @@ jobs:
           check_last_commit_only="${CHECK_LAST_COMMIT_ONLY,,}"
           is_prerelease="${IS_PRERELEASE,,}"
           prerelease_name="${PRERELEASE_NAME:-prerelease}"
+          suppress_tag="${SUPPRESS_TAG,,}"
 
           if [[ -n "$prefix" ]]; then
             tag_match="${prefix}-v*"
@@ -207,8 +209,16 @@ jobs:
 
           # Build the final version string and determine changelog base tag
           if [[ "$is_prerelease" == "true" ]]; then
-            # Increment prerelease version
-            prerelease_version=$((last_prerelease_version + 1))
+            if [[ "$suppress_tag" == "true" ]]; then
+              # When tags are suppressed, use GITHUB_RUN_NUMBER as the prerelease
+              # counter to guarantee uniqueness across concurrent runs (e.g. parallel
+              # PR builds). Tag-based counting would always restart from 1 because
+              # suppressed runs never create the tag the next run would look for.
+              prerelease_version="${GITHUB_RUN_NUMBER}"
+            else
+              # Increment prerelease version based on existing tags
+              prerelease_version=$((last_prerelease_version + 1))
+            fi
             new_version="$major.$minor.$patch-${prerelease_name}.${prerelease_version}"
             # For prereleases, compare against the previous prerelease for this base version if present, otherwise last stable
             if [[ -n "$last_prerelease_tag" ]]; then
